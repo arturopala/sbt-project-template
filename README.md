@@ -2,10 +2,11 @@
 
 An empty sbt project template having handy plugins and dependencies configured. 
 
-Use `git merge` to add additional dependecies and default resources:
+Use `git checkout {branch}` to get template other than empty one
+Use `git merge {branch}` to add other dependecies and default resources
 
 ```
-git merge with-akka
-git merge with-scalaz
-git merge with-scalajs
+with-akka
+with-scalaz
+with-scalajs
 ```
