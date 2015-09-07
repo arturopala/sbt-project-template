@@ -18,10 +18,23 @@ resolvers += Resolver.jcenterRepo
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
+val akkaVersion = "2.3.12"
+val akkaHttpVersion = "1.0"
+val scalazVersion = "7.1.3"
+val shapelessVersion = "2.2.5"
+
 libraryDependencies ++= Seq(
-  "org.scalaz" %% "scalaz-core" % "7.1.3",
-  "org.scalaz" %% "scalaz-effect" % "7.1.3",
-  "com.chuusai" %% "shapeless" % "2.2.5",
+  "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+  "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
+  "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
+  "com.typesafe.akka" %% "akka-stream-experimental" % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-core-experimental" % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-experimental" % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-xml-experimental" % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-http-spray-json-experimental" % akkaHttpVersion,
+  "org.scalaz" %% "scalaz-core" % scalazVersion,
+  "org.scalaz" %% "scalaz-effect" % scalazVersion,
+  "com.chuusai" %% "shapeless" % shapelessVersion,
   "org.scalatest" %% "scalatest" % "2.2.5" % Test,
   "org.scalacheck" %% "scalacheck" % "1.12.2" % Test
 )
