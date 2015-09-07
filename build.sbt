@@ -18,7 +18,13 @@ resolvers += Resolver.jcenterRepo
 
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
+val scalazVersion = "7.1.3"
+val shapelessVersion = "2.2.5"
+
 libraryDependencies ++= Seq(
+  "org.scalaz" %% "scalaz-core" % scalazVersion,
+  "org.scalaz" %% "scalaz-effect" % scalazVersion,
+  "com.chuusai" %% "shapeless" % shapelessVersion,
   "org.scalatest" %% "scalatest" % "2.2.5" % Test,
   "org.scalacheck" %% "scalacheck" % "1.12.2" % Test
 )
