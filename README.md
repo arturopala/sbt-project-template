@@ -2,7 +2,8 @@
 
 An empty sbt project template having handy plugins and dependencies configured. 
 
--   Add Akka dependecies and default stuff:
+Use `git merge` to add additional dependecies and default resources:
+
 ```
 git merge with-akka
 ```
