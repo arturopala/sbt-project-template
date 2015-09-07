@@ -6,4 +6,6 @@ Use `git merge` to add additional dependecies and default resources:
 
 ```
 git merge with-akka
+git merge with-scalaz
+git merge with-scalajs
 ```
