@@ -1,3 +1,5 @@
+enablePlugins(ScalaJSPlugin)
+
 name := """some-project-name"""
 
 version := "1.0-SNAPSHOT"
@@ -19,9 +21,17 @@ resolvers += Resolver.jcenterRepo
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
 libraryDependencies ++= Seq(
+  "org.scala-js" %%% "scalajs-dom" % "0.8.1",
+  "com.lihaoyi" %%% "utest" % "0.3.0" % Test,
   "org.scalatest" %% "scalatest" % "2.2.5" % Test,
   "org.scalacheck" %% "scalacheck" % "1.12.2" % Test
 )
+
+persistLauncher in Compile := true
+
+persistLauncher in Test := false
+
+testFrameworks += new TestFramework("utest.runner.Framework")
 
 import scalariform.formatter.preferences._
 
@@ -32,8 +42,6 @@ ScalariformKeys.preferences := PreferencesImporterExporter.loadPreferences(baseD
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 coverageEnabled := false
-
-fork := true
 
 connectInput in run := true
 
