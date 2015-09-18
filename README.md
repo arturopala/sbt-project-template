@@ -1,4 +1,4 @@
-### Empty sbt project template
+### Empty sbt project template with Akka Stream & Http dependencies and a lot of working code examples.
 
 An empty sbt project template having handy plugins and dependencies configured. 
 
