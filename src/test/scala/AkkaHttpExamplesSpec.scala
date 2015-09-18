@@ -6,7 +6,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.http.scaladsl.model.StatusCodes
 import org.scalatest.matchers._
 
-class ExampleAkkaHttpSpec extends WordSpecLike with Matchers with PropertyChecks with ScalatestRouteTest {
+class AkkaHttpExamplesSpec extends WordSpecLike with Matchers with PropertyChecks with ScalatestRouteTest {
 
   implicit override val generatorDrivenConfig = PropertyCheckConfig(minSize = 1, maxSize = 100, minSuccessful = 100, workers = 5)
 
