@@ -48,6 +48,8 @@ object AkkaStreamExamples {
 
   object graph {
 
+    import FlowGraph.Implicits._
+
     object closed {
 
       val g = FlowGraph.closed() { builder: FlowGraph.Builder[Unit] =>
@@ -132,6 +134,34 @@ object AkkaStreamExamples {
         concat <~ bcast
       }
 
+      val g6 = FlowGraph.closed() { implicit builder =>
+        val A: Outlet[Int] = builder.add(Source.single(0))
+        val B: UniformFanOutShape[Int, Int] = builder.add(Broadcast[Int](2))
+        val C: UniformFanInShape[Int, Int] = builder.add(Merge[Int](2))
+        val D: FlowShape[Int, Int] = builder.add(Flow[Int].map(_ + 1))
+        val E: UniformFanOutShape[Int, Int] = builder.add(Balance[Int](2))
+        val F: UniformFanInShape[Int, Int] = builder.add(Merge[Int](2))
+        val G: Inlet[Any] = builder.add(Sink.foreach(println))
+
+        C <~ F
+        A ~> B ~> C ~> F
+        B ~> D ~> E ~> F
+        E ~> G
+      }
+
+      val g7 = FlowGraph.closed() { implicit builder =>
+        val B = builder.add(Broadcast[Int](2))
+        val C = builder.add(Merge[Int](2))
+        val E = builder.add(Balance[Int](2))
+        val F = builder.add(Merge[Int](2))
+
+        Source.single(0) ~> B.in; B.out(0) ~> C.in(1); C.out ~> F.in(0)
+        C.in(0) <~ F.out
+
+        B.out(1).map(_ + 1) ~> E.in; E.out(0) ~> F.in(1)
+        E.out(1) ~> Sink.foreach(println)
+      }
+
     }
 
     object partial {
@@ -164,6 +194,49 @@ object AkkaStreamExamples {
 
         // expose ports
         (broadcast.in, zip.out)
+      }
+
+      val partial = FlowGraph.partial() { implicit builder =>
+        val B = builder.add(Broadcast[Int](2))
+        val C = builder.add(Merge[Int](2))
+        val E = builder.add(Balance[Int](2))
+        val F = builder.add(Merge[Int](2))
+
+        C <~ F
+        B ~> C ~> F
+        B ~> Flow[Int].map(_ + 1) ~> E ~> F
+        FlowShape(B.in, E.out(1))
+      }.named("partial")
+
+      Source.single(0).via(partial).to(Sink.ignore)
+
+      // Convert the partial graph of FlowShape to a Flow to get
+      // access to the fluid DSL (for example to be able to call .filter())
+      val flow = Flow.wrap(partial)
+
+      // Simple way to create a graph backed Source
+      val source = Source() { implicit builder =>
+        val merge = builder.add(Merge[Int](2))
+        Source.single(0) ~> merge
+        Source(List(2, 3, 4)) ~> merge
+
+        // Exposing exactly one output port
+        merge.out
+      }
+
+      // Building a Sink with a nested Flow, using the fluid DSL
+      val sink = {
+        val nestedFlow = Flow[Int].map(_ * 2).drop(10).named("nestedFlow")
+        nestedFlow.to(Sink.head)
+      }
+
+      // Putting all together
+      val closed = source.via(flow.filter(_ > 1)).to(sink)
+
+      val closed1 = Source.single(0).to(Sink.foreach(println))
+
+      val closed2 = FlowGraph.closed() { implicit builder =>
+        val embeddedClosed: ClosedShape = builder.add(closed1)
       }
 
     }
