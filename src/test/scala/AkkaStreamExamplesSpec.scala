@@ -22,83 +22,136 @@ class AkkaStreamExamplesSpec extends WordSpecLike with Matchers with PropertyChe
   implicit val materializer = akka.stream.ActorMaterializer()
 
   "An Akka Stream" must {
+
+    "be easily run and tested" which {
+
+      "can be done using just ordinary source" in {
+        //Testing a custom sink can be as simple as attaching a source that emits elements from a predefined 
+        //collection, running a constructed test flow and asserting on the results that sink produced. 
+        //Here is an example of a test for a sink:
+        val sinkUnderTest = Flow[Int].map(_ * 2).toMat(Sink.fold(0)(_ + _))(Keep.right)
+        val future = Source(1 to 4).runWith(sinkUnderTest)
+        val result = Await.result(future, 100.millis)
+        assert(result == 20)
+      }
+
+      "or ordinary sink" in {
+        val sourceUnderTest = Source.repeat(1).map(_ * 2)
+        val future = sourceUnderTest.grouped(10).runWith(Sink.head)
+        val result = Await.result(future, 100.millis)
+        assert(result == Seq.fill(10)(2))
+      }
+
+      "or both source and sink" in {
+        val flowUnderTest = Flow[Int].takeWhile(_ < 5)
+        val future = Source(1 to 10).via(flowUnderTest).runWith(Sink.fold(Seq.empty[Int])(_ :+ _))
+        val result = Await.result(future, 100.millis)
+        assert(result == (1 to 4))
+      }
+
+      "but also using Akka TestKit" in {
+        import system.dispatcher
+        import akka.testkit.TestProbe
+        import akka.pattern.pipe
+
+        val sourceUnderTest = Source(1 to 4).grouped(2)
+        val probe = TestProbe()
+        sourceUnderTest.grouped(2).runWith(Sink.head).pipeTo(probe.ref)
+        probe.expectMsg(100.millis, Seq(Seq(1, 2), Seq(3, 4)))
+      }
+
+      "we can also use a Sink.actorRef that sends all incoming elements to the given ActorRef" in {
+        import akka.testkit.TestProbe
+        case object Tick
+        val sourceUnderTest = Source(0.seconds, 200.millis, Tick)
+
+        val probe = TestProbe()
+        val cancellable = sourceUnderTest.to(Sink.actorRef(probe.ref, "completed")).run()
+
+        probe.expectMsg(1.second, Tick)
+        probe.expectNoMsg(100.millis)
+        probe.expectMsg(200.millis, Tick)
+        cancellable.cancel()
+        probe.expectMsg(200.millis, "completed")
+      }
+
+      "we can use Source.actorRef too and have full control over elements to be sent." in {
+        val sinkUnderTest = Flow[Int].map(_.toString).toMat(Sink.fold("")(_ + _))(Keep.right)
+
+        val (ref, future) = Source.actorRef(8, OverflowStrategy.fail).toMat(sinkUnderTest)(Keep.both).run()
+
+        ref ! 1
+        ref ! 2
+        ref ! 3
+        ref ! akka.actor.Status.Success("done")
+
+        val result = Await.result(future, 100.millis)
+        assert(result == "123")
+      }
+
+      "akka-stream-testkit module that provides tools specifically for writing stream tests like TestSink" in {
+        import akka.stream.testkit.scaladsl.TestSink
+        val sourceUnderTest = Source(1 to 4).filter(_ % 2 == 0).map(_ * 2)
+        sourceUnderTest
+          .runWith(TestSink.probe[Int])
+          .request(2)
+          .expectNext(4, 8)
+          .expectComplete()
+      }
+
+      "or TestSource" in {
+        import akka.stream.testkit.scaladsl.TestSource
+        val sinkUnderTest = Sink.cancelled
+
+        TestSource.probe[Int]
+          .toMat(sinkUnderTest)(Keep.left)
+          .run()
+          .expectCancellation()
+      }
+
+      "TestSource allows to inject exceptions and test sink behaviour on error conditions" in {
+        import akka.stream.testkit.scaladsl.TestSource
+        val sinkUnderTest = Sink.head[Int]
+
+        val (probe, future) = TestSource.probe[Int]
+          .toMat(sinkUnderTest)(Keep.both)
+          .run()
+        probe.sendError(new Exception("boom"))
+
+        Await.ready(future, 100.millis)
+        val Failure(exception) = future.value.get
+        assert(exception.getMessage == "boom")
+      }
+
+      "Test source and sink can be used together in combination when testing flows" in {
+        import akka.stream.testkit.scaladsl._
+        import scala.concurrent.ExecutionContext.Implicits.global
+
+        val flowUnderTest = Flow[Int].mapAsyncUnordered(2) { sleep =>
+          akka.pattern.after(10.millis * sleep, using = system.scheduler)(Future.successful(sleep))
+        }
+
+        val (pub, sub) = TestSource.probe[Int]
+          .via(flowUnderTest)
+          .toMat(TestSink.probe[Int])(Keep.both)
+          .run()
+
+        sub.request(n = 3)
+        pub.sendNext(3)
+        pub.sendNext(2)
+        pub.sendNext(1)
+        sub.expectNextUnordered(1, 2, 3)
+
+        pub.sendError(new Exception("Power surge in the linear subroutine C-47!"))
+        val ex = sub.expectError
+        assert(ex.getMessage.contains("C-47"))
+      }
+
+    }
+
     "provide source, flow and sink components" which {
 
-      "allows to build and run simple workflow" in {
-
-        // simple domain definition
-        case class Worker(name: String)
-        case class Task[A](id: Int, run: Worker => A)
-
-        // dumb task generator
-        def taskGenerator(i: Int): Task[(Int, String)] = Task(i, (w: Worker) => {
-          val delay = scala.util.Random.nextInt(80) + 20
-          Thread.sleep(delay)
-          (i, w.name+" "+delay+"ms ["+Thread.currentThread.getId+"]")
-        })
-
-        trait Tick
-        object Tick extends Tick {
-          def onTick[A, M](source: Source[A, M], clock: Source[Tick, Cancellable]): Source[A, M] = source.via((Flow() {
-            implicit b =>
-              val merge = b.add(Zip[A, Tick])
-              clock ~> merge.in1
-              (merge.in0, merge.out)
-          })).map(_._1)
-
-          implicit class SourceTickOps[A, M](source: Source[A, M]) {
-            def onTick(clock: Source[Tick, Cancellable]): Source[A, M] = Tick.onTick(source, clock)
-          }
-        }
-        import Tick.SourceTickOps
-        val clock: Source[Tick, Cancellable] = Source(0.millis, 10.millis, Tick)
-
-        // tasks source
-        val tasks = Source(Stream.from(1).map(taskGenerator)).onTick(clock)
-
-        // taks runner definition
-        def taskRunner[A](threads: Int, names: scala.collection.immutable.Iterable[String]) = FlowGraph.partial() {
-          implicit b =>
-
-            // initial pool of workers
-            val initialWorkers = Source[Worker](names.map(Worker(_)))
-
-            // processing graph components definition
-            val workers = b.add(MergePreferred[Worker](1))
-            val zipper = b.add(Zip[Worker, Task[A]])
-            val balancer = b.add(Balance[(Worker, Task[A])](threads))
-            val merger = b.add(Merge[(Worker, A)](threads))
-            val unzipper = b.add(Unzip[Worker, A])
-
-            // executor flow does real bussines job
-            val executor = Flow[(Worker, Task[A])] map { case (w, t) => (w, t.run(w)) }
-
-            // wiring components
-            initialWorkers ~> workers.in(0)
-            workers.out ~> zipper.in0
-            zipper.out ~> balancer.in
-            for (i <- 0 until threads) {
-              balancer.out(i) ~> executor ~> merger.in(i)
-            }
-            merger.out ~> unzipper.in
-            unzipper.out0 ~> workers.preferred
-
-            // we returns single inlet and single outlet to wrap later our processing graph as a flow
-            FlowShape(zipper.in1, unzipper.out1)
-        }.named("task-runner")
-
-        val noOfThreads = 5
-        val noOfTasks = 100
-        val workerNames = List("Adam", "Marek", "Andrzej", "Krzysztof", "Wojciech", "Jerzy", "Stanisław")
-
-        // taks runner instance
-        val runner = Flow.wrap(taskRunner[(Int, String)](noOfThreads, workerNames)).map(e => { println(e); e })
-
-        // HERE we really run our processing
-        val future = tasks.take(noOfTasks).via(runner).runWith(Sink.ignore)
-
-        // waiting for end of processing
-        Await.result(future, 60.seconds)
+      "allows to build and run custom workflow" in {
 
       }
     }
