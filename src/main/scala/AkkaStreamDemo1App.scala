@@ -28,13 +28,12 @@ object AkkaStreamDemo1App extends App {
   })
 
   // clock
-  import Clock._
-  val clock: Source[Tick, Cancellable] = Source(0.millis, 10.millis, Tick)
+  import MoreFlowOps._
 
   //////////////////
   // tasks source //
   //////////////////
-  val tasks = Source(Stream.from(1).map(taskGenerator)).sendOnTick(clock)
+  val tasks = Source(Stream.from(1).map(taskGenerator)).throttle(20.millis)
 
   // taks runner definition
   def taskRunner[A](threads: Int, names: scala.collection.immutable.Iterable[String]) = FlowGraph.partial() {
@@ -86,23 +85,4 @@ object AkkaStreamDemo1App extends App {
     println("Done.")
     system.shutdown()
   }
-}
-
-object Clock {
-
-  trait Tick
-  case object Tick extends Tick
-
-  // merges source with clock passing elements only when tick occurs
-  def onTick[A, M](source: Source[A, M], clock: Source[Tick, Cancellable]): Source[A, M] = source.via((Flow() {
-    implicit b =>
-      val merge = b.add(Zip[A, Tick])
-      clock ~> merge.in1
-      (merge.in0, merge.out)
-  })).map(_._1)
-
-  implicit class Ops[A, M](source: Source[A, M]) {
-    def sendOnTick(clock: Source[Tick, Cancellable]): Source[A, M] = Clock.onTick(source, clock)
-  }
-
 }

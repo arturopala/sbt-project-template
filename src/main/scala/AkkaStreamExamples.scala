@@ -664,4 +664,146 @@ object AkkaStreamExamples {
 
   }
 
+  object actorintegration {
+
+    import akka.actor._
+    import akka.stream.actor._
+    import scala.annotation.tailrec
+
+    object publisher {
+
+      object JobManager {
+        def props: Props = Props[JobManager]
+
+        final case class Job(payload: String)
+        case object JobAccepted
+        case object JobDenied
+      }
+
+      class JobManager extends ActorPublisher[JobManager.Job] {
+        import akka.stream.actor.ActorPublisherMessage._
+        import JobManager._
+
+        val MaxBufferSize = 100
+        var buf = Vector.empty[Job]
+
+        def receive = {
+          case job: Job if buf.size == MaxBufferSize =>
+            sender() ! JobDenied
+          case job: Job =>
+            sender() ! JobAccepted
+            if (buf.isEmpty && totalDemand > 0)
+              onNext(job)
+            else {
+              buf :+= job
+              deliverBuf()
+            }
+          case Request(_) =>
+            deliverBuf()
+          case Cancel =>
+            context.stop(self)
+        }
+
+        @tailrec final def deliverBuf(): Unit =
+          if (totalDemand > 0) {
+            /*
+         * totalDemand is a Long and could be larger than
+         * what buf.splitAt can accept
+         */
+            if (totalDemand <= Int.MaxValue) {
+              val (use, keep) = buf.splitAt(totalDemand.toInt)
+              buf = keep
+              use foreach onNext
+            }
+            else {
+              val (use, keep) = buf.splitAt(Int.MaxValue)
+              buf = keep
+              use foreach onNext
+              deliverBuf()
+            }
+          }
+      }
+
+      val jobManagerSource = Source.actorPublisher[JobManager.Job](JobManager.props)
+
+      val ref = Flow[JobManager.Job]
+        .map(_.payload.toUpperCase)
+        .map { elem => println(elem); elem }
+        .to(Sink.ignore)
+        .runWith(jobManagerSource)
+
+      ref ! JobManager.Job("a")
+      ref ! JobManager.Job("b")
+      ref ! JobManager.Job("c")
+    }
+
+    object subscriber {
+
+      import akka.routing._
+
+      object WorkerPool {
+        case class Msg(id: Int, replyTo: ActorRef)
+        case class Work(id: Int)
+        case class Reply(id: Int)
+        case class Done(id: Int)
+
+        def props: Props = Props(new WorkerPool)
+      }
+
+      class WorkerPool extends ActorSubscriber {
+        import WorkerPool._
+        import ActorSubscriberMessage._
+
+        val MaxQueueSize = 10
+        var queue = Map.empty[Int, ActorRef]
+
+        val router = {
+          val routees = Vector.fill(3) {
+            ActorRefRoutee(context.actorOf(Props[Worker]))
+          }
+          Router(RoundRobinRoutingLogic(), routees)
+        }
+
+        override val requestStrategy = new MaxInFlightRequestStrategy(max = MaxQueueSize) {
+          override def inFlightInternally: Int = queue.size
+        }
+
+        def receive = {
+          case OnNext(Msg(id, replyTo)) =>
+            queue += (id -> replyTo)
+            assert(queue.size <= MaxQueueSize, s"queued too many: ${queue.size}")
+            router.route(Work(id), self)
+          case Reply(id) =>
+            queue(id) ! Done(id)
+            queue -= id
+        }
+      }
+
+      class Worker extends Actor {
+        import WorkerPool._
+        def receive = {
+          case Work(id) =>
+            // ...
+            sender() ! Reply(id)
+        }
+      }
+
+    }
+
+  }
+
+  object reactivestreams {
+
+    import org.reactivestreams.Publisher
+    import org.reactivestreams.Subscriber
+
+    def input: Publisher[Int] = ???
+    def output: Subscriber[String] = ???
+
+    val flow = Source(input).map(i => "r" * i).to(Sink(output))
+
+    flow.run()
+
+  }
+
 }
