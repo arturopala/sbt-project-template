@@ -461,4 +461,174 @@ object AkkaStreamExamples {
 
   }
 
+  object customstage {
+
+    import akka.stream.stage._
+
+    class Map[A, B](f: A => B) extends PushStage[A, B] {
+      override def onPush(elem: A, ctx: Context[B]): SyncDirective =
+        ctx.push(f(elem))
+    }
+
+    class Filter[A](p: A => Boolean) extends PushStage[A, A] {
+      override def onPush(elem: A, ctx: Context[A]): SyncDirective =
+        if (p(elem)) ctx.push(elem)
+        else ctx.pull()
+    }
+
+    class Duplicator[A]() extends PushPullStage[A, A] {
+      private var lastElem: A = _
+      private var oneLeft = false
+
+      override def onPush(elem: A, ctx: Context[A]): SyncDirective = {
+        lastElem = elem
+        oneLeft = true
+        ctx.push(elem)
+      }
+
+      override def onPull(ctx: Context[A]): SyncDirective =
+        if (!ctx.isFinishing) {
+          // the main pulling logic is below as it is demonstrated on the illustration
+          if (oneLeft) {
+            oneLeft = false
+            ctx.push(lastElem)
+          }
+          else
+            ctx.pull()
+        }
+        else {
+          // If we need to emit a final element after the upstream
+          // finished
+          if (oneLeft) ctx.pushAndFinish(lastElem)
+          else ctx.finish()
+        }
+
+      override def onUpstreamFinish(ctx: Context[A]): TerminationDirective =
+        ctx.absorbTermination()
+
+    }
+
+    class Duplicator2[A]() extends StatefulStage[A, A] {
+      override def initial: StageState[A, A] = new StageState[A, A] {
+        override def onPush(elem: A, ctx: Context[A]): SyncDirective =
+          emit(List(elem, elem).iterator, ctx)
+      }
+    }
+
+    val resultFuture = Source(1 to 10)
+      .transform(() => new Filter(_ % 2 == 0))
+      .transform(() => new Duplicator())
+      .transform(() => new Map(_ / 2))
+      .runWith(Sink.ignore)
+
+    class Buffer2[T]() extends DetachedStage[T, T] {
+      private var buf = Vector.empty[T]
+      private var capacity = 2
+
+      private def isFull = capacity == 0
+      private def isEmpty = capacity == 2
+
+      private def dequeue(): T = {
+        capacity += 1
+        val next = buf.head
+        buf = buf.tail
+        next
+      }
+
+      private def enqueue(elem: T) = {
+        capacity -= 1
+        buf = buf :+ elem
+      }
+
+      override def onPull(ctx: DetachedContext[T]): DownstreamDirective = {
+        if (isEmpty) {
+          if (ctx.isFinishing) ctx.finish() // No more elements will arrive
+          else ctx.holdDownstream() // waiting until new elements
+        }
+        else {
+          val next = dequeue()
+          if (ctx.isHoldingUpstream) ctx.pushAndPull(next) // release upstream
+          else ctx.push(next)
+        }
+      }
+
+      override def onPush(elem: T, ctx: DetachedContext[T]): UpstreamDirective = {
+        enqueue(elem)
+        if (isFull) ctx.holdUpstream() // Queue is now full, wait until new empty slot
+        else {
+          if (ctx.isHoldingDownstream) ctx.pushAndPull(dequeue()) // Release downstream
+          else ctx.pull()
+        }
+      }
+
+      override def onUpstreamFinish(ctx: DetachedContext[T]): TerminationDirective = {
+        if (!isEmpty) ctx.absorbTermination() // still need to flush from buffer
+        else ctx.finish() // already empty, finishing
+      }
+    }
+
+  }
+
+  object customjunction {
+
+    import akka.stream.FanInShape._
+
+    class ZipPorts[A, B](_init: Init[(A, B)] = Name("Zip")) extends FanInShape[(A, B)](_init) {
+      val left = newInlet[A]("left")
+      val right = newInlet[B]("right")
+      protected override def construct(i: Init[(A, B)]) = new ZipPorts(i)
+    }
+
+    class Zip[A, B] extends FlexiMerge[(A, B), ZipPorts[A, B]](new ZipPorts, Attributes.name("Zip2State")) {
+
+      import FlexiMerge._
+
+      override def createMergeLogic(p: PortT) = new MergeLogic[(A, B)] {
+        var lastInA: A = _
+
+        val readA: State[A] = State[A](Read(p.left)) { (ctx, input, element) =>
+          lastInA = element
+          readB
+        }
+
+        val readB: State[B] = State[B](Read(p.right)) { (ctx, input, element) =>
+          ctx.emit((lastInA, element))
+          readA
+        }
+
+        override def initialState: State[_] = readA
+
+        override def initialCompletionHandling = eagerClose
+      }
+    }
+
+    class Zip2[A, B] extends FlexiMerge[(A, B), ZipPorts[A, B]](
+      new ZipPorts, Attributes.name("Zip1State")) {
+      import FlexiMerge._
+      override def createMergeLogic(p: PortT) = new MergeLogic[(A, B)] {
+        override def initialState =
+          State(ReadAll(p.left, p.right)) { (ctx, _, inputs) =>
+            val a = inputs(p.left)
+            val b = inputs(p.right)
+            ctx.emit((a, b))
+            SameState
+          }
+
+        override def initialCompletionHandling = eagerClose
+      }
+    }
+
+    FlowGraph.closed(Sink.head[(Int, String)]) { implicit b =>
+      o =>
+        import FlowGraph.Implicits._
+
+        val zip = b.add(new Zip[Int, String])
+
+        Source.single(1) ~> zip.left
+        Source.single("1") ~> zip.right
+        zip.out ~> o.inlet
+    }
+
+  }
+
 }
