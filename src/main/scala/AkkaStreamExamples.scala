@@ -571,62 +571,95 @@ object AkkaStreamExamples {
 
   object customjunction {
 
-    import akka.stream.FanInShape._
+    object fleximerge {
 
-    class ZipPorts[A, B](_init: Init[(A, B)] = Name("Zip")) extends FanInShape[(A, B)](_init) {
-      val left = newInlet[A]("left")
-      val right = newInlet[B]("right")
-      protected override def construct(i: Init[(A, B)]) = new ZipPorts(i)
-    }
+      import akka.stream.FanInShape._
 
-    class Zip[A, B] extends FlexiMerge[(A, B), ZipPorts[A, B]](new ZipPorts, Attributes.name("Zip2State")) {
-
-      import FlexiMerge._
-
-      override def createMergeLogic(p: PortT) = new MergeLogic[(A, B)] {
-        var lastInA: A = _
-
-        val readA: State[A] = State[A](Read(p.left)) { (ctx, input, element) =>
-          lastInA = element
-          readB
-        }
-
-        val readB: State[B] = State[B](Read(p.right)) { (ctx, input, element) =>
-          ctx.emit((lastInA, element))
-          readA
-        }
-
-        override def initialState: State[_] = readA
-
-        override def initialCompletionHandling = eagerClose
+      class ZipPorts[A, B](_init: Init[(A, B)] = Name("Zip")) extends FanInShape[(A, B)](_init) {
+        val left = newInlet[A]("left")
+        val right = newInlet[B]("right")
+        protected override def construct(i: Init[(A, B)]) = new ZipPorts(i)
       }
-    }
 
-    class Zip2[A, B] extends FlexiMerge[(A, B), ZipPorts[A, B]](
-      new ZipPorts, Attributes.name("Zip1State")) {
-      import FlexiMerge._
-      override def createMergeLogic(p: PortT) = new MergeLogic[(A, B)] {
-        override def initialState =
-          State(ReadAll(p.left, p.right)) { (ctx, _, inputs) =>
+      class Zip[A, B] extends FlexiMerge[(A, B), ZipPorts[A, B]](new ZipPorts, Attributes.name("Zip2State")) {
+
+        import FlexiMerge._
+
+        override def createMergeLogic(p: PortT) = new MergeLogic[(A, B)] {
+          var lastInA: A = _
+
+          val readA: State[A] = State[A](Read(p.left)) { (ctx, input, element) =>
+            lastInA = element
+            readB
+          }
+
+          val readB: State[B] = State[B](Read(p.right)) { (ctx, input, element) =>
+            ctx.emit((lastInA, element))
+            readA
+          }
+
+          override def initialState: State[_] = readA
+
+          override def initialCompletionHandling = eagerClose
+        }
+      }
+
+      class ZipAll[A, B] extends FlexiMerge[(A, B), ZipPorts[A, B]](new ZipPorts, Attributes.name("Zip1State")) {
+
+        import FlexiMerge._
+
+        override def createMergeLogic(p: PortT) = new MergeLogic[(A, B)] {
+          override def initialState = State(ReadAll(p.left, p.right)) { (ctx, _, inputs) =>
             val a = inputs(p.left)
             val b = inputs(p.right)
             ctx.emit((a, b))
             SameState
           }
 
-        override def initialCompletionHandling = eagerClose
+          override def initialCompletionHandling = eagerClose
+        }
+      }
+
+      FlowGraph.closed(Sink.head[(Int, String)]) { implicit b =>
+        o =>
+          import FlowGraph.Implicits._
+
+          val zip = b.add(new Zip[Int, String])
+
+          Source.single(1) ~> zip.left
+          Source.single("1") ~> zip.right
+          zip.out ~> o.inlet
       }
     }
 
-    FlowGraph.closed(Sink.head[(Int, String)]) { implicit b =>
-      o =>
-        import FlowGraph.Implicits._
+    object flexiroute {
 
-        val zip = b.add(new Zip[Int, String])
+      import FanOutShape._
 
-        Source.single(1) ~> zip.left
-        Source.single("1") ~> zip.right
-        zip.out ~> o.inlet
+      class UnzipShape[A, B](_init: Init[(A, B)] = Name[(A, B)]("Unzip"))
+          extends FanOutShape[(A, B)](_init) {
+        val outA = newOutlet[A]("outA")
+        val outB = newOutlet[B]("outB")
+        protected override def construct(i: Init[(A, B)]) = new UnzipShape(i)
+      }
+
+      class Unzip[A, B] extends FlexiRoute[(A, B), UnzipShape[A, B]](
+        new UnzipShape, Attributes.name("Unzip")) {
+        import FlexiRoute._
+
+        override def createRouteLogic(p: PortT) = new RouteLogic[(A, B)] {
+          override def initialState =
+            State[Any](DemandFromAll(p.outA, p.outB)) {
+              (ctx, _, element) =>
+                val (a, b) = element
+                ctx.emit(p.outA)(a)
+                ctx.emit(p.outB)(b)
+                SameState
+            }
+
+          override def initialCompletionHandling = eagerClose
+        }
+      }
     }
 
   }
