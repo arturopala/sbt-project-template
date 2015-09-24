@@ -8,55 +8,60 @@ import akka.stream._
 import akka.stream.scaladsl._
 import FlowGraph.Implicits._
 
-object AkkaStreamDemo1App extends App {
+object AkkaStreamDemo1App {
 
-  implicit val system = akka.actor.ActorSystem("demo")
-  implicit val materializer = akka.stream.ActorMaterializer()
-  implicit val log = Logging(system, "")
+  def main(args: Array[String]): Unit = {
 
-  import scala.concurrent.ExecutionContext.Implicits.global
+    val noOfThreads = args.lift(0).map(_.toInt).getOrElse(5)
+    val noOfTasks = args.lift(1).map(_.toInt).getOrElse(100)
+    val maxTaskDelay = args.lift(2).map(_.toInt).getOrElse(200)
+    val taskThrottle = args.lift(3).map(_.toInt).getOrElse(10)
 
-  // simple domain definition
-  case class Worker(name: String)
-  case class Task[A](id: Int, run: Worker => A)
+    println(s"Running demo1 with noOfThreads=$noOfThreads, noOfTasks=$noOfTasks, maxTaskDelay=$maxTaskDelay, taskThrottle=$taskThrottle")
 
-  type MyTask = Task[(Int, String)]
+    implicit val system = akka.actor.ActorSystem("demo")
+    implicit val materializer = akka.stream.ActorMaterializer()
+    implicit val log = Logging(system, "")
 
-  // dumb task generator
-  def taskGenerator(i: Int): MyTask = Task(i, (w: Worker) => {
-    val delay = scala.util.Random.nextInt(200)
-    Thread.sleep(delay)
-    (i, "Worker %1$s did task in %2$s ms".format(w.name, delay))
-  })
+    import scala.concurrent.ExecutionContext.Implicits.global
 
-  import MoreFlowOps._
+    // simple domain definition
+    case class Worker(name: String)
+    case class Task[A](id: Int, run: Worker => A)
 
-  val tasks = Source(Stream.from(1).map(taskGenerator)).throttle(1.second)
+    type MyTask = Task[(Int, String)]
 
-  val workerNames = List("A", "B", "C", "D", "E", "F", "G")
-  val workers = Source[Worker](workerNames.map(Worker(_)))
+    // dumb task generator
+    def taskGenerator(i: Int): MyTask = Task(i, (w: Worker) => {
+      val delay = scala.util.Random.nextInt(maxTaskDelay)
+      Thread.sleep(delay)
+      (i, "Worker %1$s did task in %2$s ms".format(w.name, delay))
+    })
 
-  val job = Flow[(MyTask, Worker)] map { case (t, w) => (t.run(w), w) }
+    import MoreFlowOps._
 
-  val noOfThreads = 1
-  val noOfTasks = 20
+    val tasks = Source(Stream.from(1).map(taskGenerator)).throttle(taskThrottle.millis)
 
-  println(s"Running demo1 using ${workerNames.size} workers for $noOfTasks tasks on $noOfThreads threads.")
+    val workerNames = List("A", "B", "C", "D", "E", "F", "G")
+    val workers = Source[Worker](workerNames.map(Worker(_)))
 
-  val executor = Flow[MyTask].zipWithLoop(noOfThreads, workers)(job)
+    val job = Flow[(MyTask, Worker)] map { case (t, w) => (t.run(w), w) }
 
-  ///////////////////////////////////////
-  // HERE we really run our processing //
-  ///////////////////////////////////////
-  val future = tasks
-    .take(noOfTasks)
-    .via(executor)
-    .log("done").withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
-    .runWith(Sink.ignore)
+    val executor = Flow[MyTask].zipWithLoop(noOfThreads, workers)(job)
 
-  // shutdown when done
-  future.onComplete { _ ⇒
-    println("Done.")
-    system.shutdown()
+    ///////////////////////////////////////
+    // HERE we really run our processing //
+    ///////////////////////////////////////
+    val future = tasks
+      .take(noOfTasks)
+      .via(executor)
+      .log("done").withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
+      .runWith(Sink.ignore)
+
+    // shutdown when done
+    future.onComplete { _ ⇒
+      println("Done.")
+      system.shutdown()
+    }
   }
 }
