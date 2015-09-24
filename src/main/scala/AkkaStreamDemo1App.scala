@@ -25,7 +25,7 @@ object AkkaStreamDemo1App {
     import Task._
     import MoreFlowOps._
 
-    val tasks: Source[MyTask, Unit] = Source(Stream.from(1).map(taskGenerator(maxTaskDelay))).throttle(taskThrottle.millis)
+    val tasks: Source[MyTask, Unit] = Source(Stream.from(1).map(taskGenerator(maxTaskDelay))).throttle(taskThrottle.millis, 1.minute)
 
     val workerNames = List("A", "B", "C", "D", "E", "F", "G")
     val workers = Source[Worker](workerNames.map(Worker(_)))

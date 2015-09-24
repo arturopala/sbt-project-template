@@ -23,7 +23,7 @@ object MoreFlowOps {
     /** Pair elements pulled from both sources, combine materialized values */
     def zipMat[B, M1, M2](other: Source[B, M1])(combine: (Mat, M1) => M2): Source[(A, B), M2] = JoinOps.join(source, other, (a: A, b: B) => (a, b))(combine).named("zipMat")
     /** Throttle source pushing elements each interval  */
-    def throttle(interval: FiniteDuration): Source[A, Mat] = throttle(Clock(interval)).named("clock")
+    def throttle(interval: FiniteDuration, duration: FiniteDuration): Source[A, Mat] = throttle(Clock(interval, duration)).named("clock")
     /** Throttle source pushing one element for each one pulled from clock */
     def throttle[B](clock: Source[B, _]): Source[A, Mat] = JoinOps.join(source, clock, (a: A, b: B) => a)(Keep.left).named("throttle")
     /** Zip and push through flow elements pulled from both source and loopSource */
@@ -45,7 +45,7 @@ object MoreFlowOps {
 
   object Clock {
     case object Tick
-    def apply(interval: FiniteDuration): Source[Tick.type, Cancellable] = Source(0.millis, interval, Tick)
+    def apply(interval: FiniteDuration, duration: FiniteDuration): Source[Tick.type, Cancellable] = Source(0.millis, interval, Tick).takeWithin(duration)
   }
 
   object JoinOps {
