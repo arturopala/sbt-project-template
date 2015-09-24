@@ -27,7 +27,7 @@ class MoreFlowOpsSpec extends WordSpecLike with Matchers with PropertyChecks {
 
     "provide `zip` function" which {
 
-      "zip elements coming from both streams (of equal sizes)" in {
+      "zip elements coming from both streams of equal sizes" in {
         val s1 = Source(1 to 10)
         val s2 = Source(10 to (1, -1))
         s1.zip(s2).runWith(TestSink.probe[(Int, Int)])
@@ -53,7 +53,99 @@ class MoreFlowOpsSpec extends WordSpecLike with Matchers with PropertyChecks {
           .expectNext((1, 10), (2, 8), (3, 6), (4, 4))
           .expectComplete()
       }
+
+      "zip elements coming from both streams (left stream empty)" in {
+        val s1 = Source.empty
+        val s2 = Source(10 to (4, -2))
+        s1.zip(s2).runWith(TestSink.probe[(Int, Int)])
+          .request(10)
+          .expectComplete()
+      }
+
+      "zip elements coming from both streams (right stream empty)" in {
+        val s1 = Source(1 to 10)
+        val s2 = Source.empty
+        s1.zip(s2).runWith(TestSink.probe[(Int, Int)])
+          .request(10)
+          .expectComplete()
+      }
+
+      "zip elements coming from both streams empty" in {
+        val s1 = Source.empty
+        val s2 = Source.empty
+        s1.zip(s2).runWith(TestSink.probe[(Int, Int)])
+          .request(10)
+          .expectComplete()
+      }
     }
+
+    "provide `merge` function" which {
+
+      "merges elements coming from both streams of equal sizes" in {
+        val s1 = Source(1 to 10)
+        val s2 = Source(10 to (1, -1))
+        s1.merge(s2, (i: Int, j: Int) => i * j).runWith(TestSink.probe[Int])
+          .request(10)
+          .expectNext(10, 18, 24, 28, 30, 30, 28, 24, 18, 10)
+          .expectComplete()
+      }
+
+      "merges elements coming from both streams (left stream shorter)" in {
+        val s1 = Source(1 to 5)
+        val s2 = Source(10 to (1, -2))
+        s1.merge(s2, (i: Int, j: Int) => i * j).runWith(TestSink.probe[Int])
+          .request(10)
+          .expectNext(10, 16, 18, 16, 10)
+          .expectComplete()
+      }
+
+      "merges elements coming from both streams (right stream shorter)" in {
+        val s1 = Source(1 to 10)
+        val s2 = Source(10 to (4, -3))
+        s1.merge(s2, (i: Int, j: Int) => i * j).runWith(TestSink.probe[Int])
+          .request(10)
+          .expectNext(10, 14, 12)
+          .expectComplete()
+      }
+    }
+
+    "provide `viaLoop` function" which {
+
+      "loops elements from loopSource paired with elements from some source through given flow" in {
+        val s1 = Source(1 to 10)
+        val loopSource = Source(List("a", "b", "c", "d", "e", "f"))
+        val flow = Flow[(Int, String)] map { case (i: Int, s: String) => (s * i, s) }
+        val loop = s1.viaLoop(1)(loopSource, flow)
+        loop.runWith(TestSink.probe[String])
+          .request(10)
+          .expectNext("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "aaaaaaa", "bbbbbbbb", "ccccccccc", "dddddddddd")
+          .expectComplete()
+      }
+
+      "... with only single element in loopSource" in {
+        val s1 = Source(1 to 10)
+        val loopSource = Source.single("a")
+        val flow = Flow[(Int, String)] map { case (i: Int, s: String) => (s * i, s) }
+        val loop = s1.viaLoop(1)(loopSource, flow)
+        loop.runWith(TestSink.probe[String])
+          .request(5)
+          .expectNext("a", "aa", "aaa", "aaaa", "aaaaa")
+          .request(5)
+          .expectNext("aaaaaa", "aaaaaaa", "aaaaaaaa", "aaaaaaaaa", "aaaaaaaaaa")
+          .expectComplete()
+      }
+
+      "... with empty loopSource" in {
+        val s1 = Source(1 to 10)
+        val loopSource = Source.empty[String]
+        val flow = Flow[(Int, String)] map { case (i: Int, s: String) => (s * i, s) }
+        val loop = s1.viaLoop(1)(loopSource, flow)
+        loop.runWith(TestSink.probe[String])
+          .request(5)
+          .expectNoMsg(1.second)
+      }
+    }
+
   }
 
 }
