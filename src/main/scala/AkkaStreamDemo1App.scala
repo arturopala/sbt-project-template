@@ -10,9 +10,9 @@ import FlowGraph.Implicits._
 
 object AkkaStreamDemo1App extends App {
 
-  implicit val system = akka.actor.ActorSystem()
+  implicit val system = akka.actor.ActorSystem("demo")
   implicit val materializer = akka.stream.ActorMaterializer()
-  implicit val log = Logging(system, "demo1")
+  implicit val log = Logging(system, "")
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -20,65 +20,39 @@ object AkkaStreamDemo1App extends App {
   case class Worker(name: String)
   case class Task[A](id: Int, run: Worker => A)
 
+  type MyTask = Task[(Int, String)]
+
   // dumb task generator
-  def taskGenerator(i: Int): Task[(Int, String)] = Task(i, (w: Worker) => {
-    val delay = scala.util.Random.nextInt(80) + 20
+  def taskGenerator(i: Int): MyTask = Task(i, (w: Worker) => {
+    val delay = scala.util.Random.nextInt(200)
     Thread.sleep(delay)
-    (i, "Worker %2$s did task %1$03d in %3$ 3d ms on thread %4$s".format(i, w.name, delay, Thread.currentThread.getId))
+    (i, "Worker %1$s did task in %2$s ms".format(w.name, delay))
   })
 
-  // clock
   import MoreFlowOps._
 
-  //////////////////
-  // tasks source //
-  //////////////////
-  val tasks = Source(Stream.from(1).map(taskGenerator)).throttle(20.millis)
+  val tasks = Source(Stream.from(1).map(taskGenerator)).throttle(1.second)
 
-  // taks runner definition
-  def taskRunner[A](threads: Int, names: scala.collection.immutable.Iterable[String]) = FlowGraph.partial() {
-    implicit b =>
-
-      // initial pool of workers
-      val initialWorkers = Source[Worker](names.map(Worker(_)))
-
-      // processing graph components definition
-      val workers = b.add(MergePreferred[Worker](1))
-      val zipper = b.add(Zip[Worker, Task[A]])
-      val balancer = b.add(Balance[(Worker, Task[A])](threads))
-      val merger = b.add(Merge[(Worker, A)](threads))
-      val unzipper = b.add(Unzip[Worker, A])
-
-      // executor flow does real bussines job
-      val executor = Flow[(Worker, Task[A])] map { case (w, t) => (w, t.run(w)) }
-
-      // wiring components
-      initialWorkers ~> workers.in(0)
-      workers.out ~> zipper.in0
-      zipper.out ~> balancer.in
-      for (i <- 0 until threads) {
-        balancer.out(i) ~> executor ~> merger.in(i)
-      }
-      merger.out ~> unzipper.in
-      unzipper.out0 ~> workers.preferred
-
-      // we returns single inlet and single outlet to wrap later our processing graph as a flow
-      FlowShape(zipper.in1, unzipper.out1)
-  }.named("task-runner")
-
-  val noOfThreads = 5
-  val noOfTasks = 100
   val workerNames = List("A", "B", "C", "D", "E", "F", "G")
+  val workers = Source[Worker](workerNames.map(Worker(_)))
+
+  val job = Flow[(MyTask, Worker)] map { case (t, w) => (t.run(w), w) }
+
+  val noOfThreads = 1
+  val noOfTasks = 20
 
   println(s"Running demo1 using ${workerNames.size} workers for $noOfTasks tasks on $noOfThreads threads.")
 
-  // taks runner instance
-  val runner = Flow.wrap(taskRunner[(Int, String)](noOfThreads, workerNames)).map(e => { println(e._2); e })
+  val executor = Flow[MyTask].zipWithLoop(noOfThreads, workers)(job)
 
   ///////////////////////////////////////
   // HERE we really run our processing //
   ///////////////////////////////////////
-  val future = tasks.take(noOfTasks).via(runner).runWith(Sink.ignore)
+  val future = tasks
+    .take(noOfTasks)
+    .via(executor)
+    .log("done").withAttributes(Attributes.logLevels(onElement = Logging.InfoLevel))
+    .runWith(Sink.ignore)
 
   // shutdown when done
   future.onComplete { _ ⇒
