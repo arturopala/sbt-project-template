@@ -20,7 +20,7 @@ resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
 val scalazVersion = "7.1.3"
 val shapelessVersion = "2.2.5"
-val akkaVersion = "2.3.13"
+val akkaVersion = "2.4.0-RC3"
 val akkaHttpVersion = "1.0"
 
 libraryDependencies ++= Seq(
@@ -37,9 +37,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-testkit-experimental" % akkaHttpVersion % Test,
   "org.slf4j" % "slf4j-api" % "1.7.12",
   "org.slf4j" % "slf4j-simple" % "1.7.12",
-  "com.github.scopt" %% "scopt" % "3.3.0",
   "org.scalatest" %% "scalatest" % "2.2.5" % Test,
-  "org.scalacheck" %% "scalacheck" % "1.12.2" % Test
+  "org.scalacheck" %% "scalacheck" % "1.12.5" % Test
 )
 
 import scalariform.formatter.preferences._
