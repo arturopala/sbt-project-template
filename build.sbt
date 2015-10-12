@@ -20,7 +20,7 @@ resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 
 val scalazVersion = "7.1.3"
 val shapelessVersion = "2.2.5"
-val akkaVersion = "2.4.0-RC3"
+val akkaVersion = "2.4.0"
 val akkaHttpVersion = "1.0"
 
 libraryDependencies ++= Seq(
