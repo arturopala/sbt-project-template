@@ -8,7 +8,7 @@ startYear := Some(2015)
 
 description := "some-project-description"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
 developers := List(Developer("arturopala","Artur Opala","opala.artur@gmail.com",url("https://pl.linkedin.com/in/arturopala")))
 
@@ -42,12 +42,10 @@ libraryDependencies ++= Seq(
 )
 
 import scalariform.formatter.preferences._
-
-com.typesafe.sbt.SbtScalariform.scalariformSettings
+import com.typesafe.sbt.SbtScalariform
+import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 
 ScalariformKeys.preferences := PreferencesImporterExporter.loadPreferences(baseDirectory.value / "project" / "formatterPreferences.properties" toString)
-
-net.virtualvoid.sbt.graph.Plugin.graphSettings
 
 coverageEnabled := false
 

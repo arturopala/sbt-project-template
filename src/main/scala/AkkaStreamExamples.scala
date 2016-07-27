@@ -1,7 +1,7 @@
 object AkkaStreamExamples {
 
-  import scala.concurrent.{ Future, Promise }
-  import scala.util.{ Try, Success, Failure }
+  import scala.concurrent.{Future, Promise}
+  import scala.util.{Try, Success, Failure}
   import scala.util.control.NonFatal
   import akka.actor.ActorSystem
   import akka.stream._
@@ -73,14 +73,13 @@ object AkkaStreamExamples {
       val bottomHeadSink = Sink.head[Int]
       val sharedDoubler = Flow[Int].map(_ * 2)
 
-      val g2 = FlowGraph.closed(topHeadSink, bottomHeadSink)((_, _)) { implicit builder =>
-        (topHS, bottomHS) =>
-          import FlowGraph.Implicits._
-          val broadcast = builder.add(Broadcast[Int](2))
-          Source.single(1) ~> broadcast.in
+      val g2 = FlowGraph.closed(topHeadSink, bottomHeadSink)((_, _)) { implicit builder => (topHS, bottomHS) =>
+        import FlowGraph.Implicits._
+        val broadcast = builder.add(Broadcast[Int](2))
+        Source.single(1) ~> broadcast.in
 
-          broadcast.out(0) ~> sharedDoubler ~> topHS.inlet
-          broadcast.out(1) ~> sharedDoubler ~> bottomHS.inlet
+        broadcast.out(0) ~> sharedDoubler ~> topHS.inlet
+        broadcast.out(1) ~> sharedDoubler ~> bottomHS.inlet
       }
 
       val pickMaxOfThree = FlowGraph.partial() { implicit b =>
@@ -95,17 +94,16 @@ object AkkaStreamExamples {
 
       val resultSink = Sink.head[Int]
 
-      val g3 = FlowGraph.closed(resultSink) { implicit b =>
-        sink =>
-          import FlowGraph.Implicits._
+      val g3 = FlowGraph.closed(resultSink) { implicit b => sink =>
+        import FlowGraph.Implicits._
 
-          // importing the partial graph will return its shape (inlets & outlets)
-          val pm3 = b.add(pickMaxOfThree)
+        // importing the partial graph will return its shape (inlets & outlets)
+        val pm3 = b.add(pickMaxOfThree)
 
-          Source.single(1) ~> pm3.in(0)
-          Source.single(2) ~> pm3.in(1)
-          Source.single(3) ~> pm3.in(2)
-          pm3.out ~> sink.inlet
+        Source.single(1) ~> pm3.in(0)
+        Source.single(2) ~> pm3.in(1)
+        Source.single(3) ~> pm3.in(2)
+        pm3.out ~> sink.inlet
       }
 
       val source = Source(1 to 10)
@@ -248,9 +246,10 @@ object AkkaStreamExamples {
       // A shape represents the input and output ports of a reusable
       // processing module
       case class PriorityWorkerPoolShape[In, Out](
-          jobsIn: Inlet[In],
+          jobsIn:         Inlet[In],
           priorityJobsIn: Inlet[In],
-          resultsOut: Outlet[Out]) extends Shape {
+          resultsOut:     Outlet[Out]
+      ) extends Shape {
 
         // It is important to provide the list of all input and output
         // ports with a stable order. Duplicates are not allowed.
@@ -262,12 +261,14 @@ object AkkaStreamExamples {
         override def deepCopy() = PriorityWorkerPoolShape(
           jobsIn.carbonCopy(),
           priorityJobsIn.carbonCopy(),
-          resultsOut.carbonCopy())
+          resultsOut.carbonCopy()
+        )
 
         // A Shape must also be able to create itself from existing ports
         override def copyFromPorts(
-          inlets: immutable.Seq[Inlet[_]],
-          outlets: immutable.Seq[Outlet[_]]) = {
+          inlets:  immutable.Seq[Inlet[_]],
+          outlets: immutable.Seq[Outlet[_]]
+        ) = {
           assert(inlets.size == this.inlets.size)
           assert(outlets.size == this.outlets.size)
           // This is why order matters when overriding inlets and outlets
@@ -298,8 +299,9 @@ object AkkaStreamExamples {
 
       object PriorityWorkerPool {
         def apply[In, Out](
-          worker: Flow[In, Out, Any],
-          workerCount: Int): Graph[PriorityWorkerPoolShape[In, Out], Unit] = {
+          worker:      Flow[In, Out, Any],
+          workerCount: Int
+        ): Graph[PriorityWorkerPoolShape[In, Out], Unit] = {
 
           FlowGraph.partial() { implicit b ⇒
             import FlowGraph.Implicits._
@@ -322,7 +324,8 @@ object AkkaStreamExamples {
             PriorityWorkerPoolShape(
               jobsIn = priorityMerge.in(0),
               priorityJobsIn = priorityMerge.preferred,
-              resultsOut = resultsMerge.out)
+              resultsOut = resultsMerge.out
+            )
           }
 
         }
@@ -620,15 +623,14 @@ object AkkaStreamExamples {
         }
       }
 
-      FlowGraph.closed(Sink.head[(Int, String)]) { implicit b =>
-        o =>
-          import FlowGraph.Implicits._
+      FlowGraph.closed(Sink.head[(Int, String)]) { implicit b => o =>
+        import FlowGraph.Implicits._
 
-          val zip = b.add(new Zip[Int, String])
+        val zip = b.add(new Zip[Int, String])
 
-          Source.single(1) ~> zip.left
-          Source.single("1") ~> zip.right
-          zip.out ~> o.inlet
+        Source.single(1) ~> zip.left
+        Source.single("1") ~> zip.right
+        zip.out ~> o.inlet
       }
     }
 
@@ -644,7 +646,8 @@ object AkkaStreamExamples {
       }
 
       class Unzip[A, B] extends FlexiRoute[(A, B), UnzipShape[A, B]](
-        new UnzipShape, Attributes.name("Unzip")) {
+        new UnzipShape, Attributes.name("Unzip")
+      ) {
         import FlexiRoute._
 
         override def createRouteLogic(p: PortT) = new RouteLogic[(A, B)] {

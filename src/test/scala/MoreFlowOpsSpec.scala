@@ -1,14 +1,14 @@
-import org.scalatest.{ WordSpecLike, Matchers }
+import org.scalatest.{WordSpecLike, Matchers}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.junit.JUnitRunner
 import org.scalacheck._
 import org.scalatest.matchers._
 import org.scalatest.concurrent.ScalaFutures._
 import scala.concurrent.duration._
-import scala.concurrent.{ Future, Await }
-import scala.util.{ Try, Success, Failure }
+import scala.concurrent.{Future, Await}
+import scala.util.{Try, Success, Failure}
 import scala.util.control.NonFatal
-import akka.actor.{ ActorSystem, Cancellable }
+import akka.actor.{ActorSystem, Cancellable}
 import akka.stream._
 import akka.stream.scaladsl._
 import FlowGraph.Implicits._

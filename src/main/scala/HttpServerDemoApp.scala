@@ -2,8 +2,8 @@ import akka.actor.ActorSystem
 import akka.stream._
 import akka.stream.scaladsl._
 import akka.http.scaladsl._
-import scala.concurrent.{ Future }
-import scala.util.{ Try, Success, Failure }
+import scala.concurrent.{Future}
+import scala.util.{Try, Success, Failure}
 import akka.http.scaladsl._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._

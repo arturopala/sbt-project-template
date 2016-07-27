@@ -1,4 +1,4 @@
-import org.scalatest.{ WordSpecLike, Matchers }
+import org.scalatest.{WordSpecLike, Matchers}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.junit.JUnitRunner
 import org.scalacheck._
@@ -10,10 +10,10 @@ class AkkaStreamExamplesSpec extends WordSpecLike with Matchers with PropertyChe
 
   implicit override val generatorDrivenConfig = PropertyCheckConfig(minSize = 1, maxSize = 100, minSuccessful = 100, workers = 5)
 
-  import scala.concurrent.{ Future, Await }
-  import scala.util.{ Try, Success, Failure }
+  import scala.concurrent.{Future, Await}
+  import scala.util.{Try, Success, Failure}
   import scala.util.control.NonFatal
-  import akka.actor.{ ActorSystem, Cancellable }
+  import akka.actor.{ActorSystem, Cancellable}
   import akka.stream._
   import akka.stream.scaladsl._
   import FlowGraph.Implicits._

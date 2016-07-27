@@ -1,8 +1,8 @@
-import scala.concurrent.{ Future, Promise, Await }
-import scala.util.{ Try, Success, Failure }
+import scala.concurrent.{Future, Promise, Await}
+import scala.util.{Try, Success, Failure}
 import scala.util.control.NonFatal
 import scala.concurrent.duration._
-import akka.actor.{ ActorSystem, Cancellable }
+import akka.actor.{ActorSystem, Cancellable}
 import akka.event.Logging
 import akka.stream._
 import akka.stream.scaladsl._

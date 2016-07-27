@@ -1,7 +1,7 @@
 object AkkaHttpExamples {
 
-  import scala.concurrent.{ Future }
-  import scala.util.{ Try, Success, Failure }
+  import scala.concurrent.{Future}
+  import scala.util.{Try, Success, Failure}
   import scala.util.control.NonFatal
   import akka.actor.ActorSystem
   import akka.stream.scaladsl._
@@ -63,8 +63,10 @@ object AkkaHttpExamples {
 
         val requestHandler: HttpRequest => HttpResponse = {
           case HttpRequest(GET, Uri.Path("/"), _, _, _) =>
-            HttpResponse(entity = HttpEntity(MediaTypes.`text/html`,
-              "<html><body>Hello world!</body></html>"))
+            HttpResponse(entity = HttpEntity(
+              MediaTypes.`text/html`,
+              "<html><body>Hello world!</body></html>"
+            ))
 
           case HttpRequest(GET, Uri.Path("/ping"), _, _, _) =>
             HttpResponse(entity = "PONG!")
@@ -348,14 +350,13 @@ object AkkaHttpExamples {
           //The mapInnerRoute directive is used as a building block for Custom Directives to replace the inner route with any other route. 
           //Usually, the returned route wraps the original one with custom execution logic.
           val completeWithInnerException =
-            mapInnerRoute { route =>
-              ctx =>
-                try {
-                  route(ctx)
-                }
-                catch {
-                  case NonFatal(e) => ctx.complete(s"Got ${e.getClass.getSimpleName} '${e.getMessage}'")
-                }
+            mapInnerRoute { route => ctx =>
+              try {
+                route(ctx)
+              }
+              catch {
+                case NonFatal(e) => ctx.complete(s"Got ${e.getClass.getSimpleName} '${e.getMessage}'")
+              }
             }
 
           val route15 = completeWithInnerException {

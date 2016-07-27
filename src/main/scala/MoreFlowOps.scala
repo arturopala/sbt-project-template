@@ -1,8 +1,8 @@
-import scala.concurrent.{ Future, Promise, Await }
-import scala.util.{ Try, Success, Failure }
+import scala.concurrent.{Future, Promise, Await}
+import scala.util.{Try, Success, Failure}
 import scala.util.control.NonFatal
 import scala.concurrent.duration._
-import akka.actor.{ ActorSystem, Cancellable }
+import akka.actor.{ActorSystem, Cancellable}
 import akka.event.Logging
 import akka.stream._
 import akka.stream.scaladsl._
@@ -50,22 +50,18 @@ object MoreFlowOps {
 
   object JoinOps {
 
-    def join[A, B, C, Mat, M1, M2](left: Source[A, M1], right: Source[B, M2], f: (A, B) => C)(combine: (M1, M2) => Mat): Source[C, Mat] = Source(left, right)(combine) {
-      implicit b =>
-        (left, right) =>
-          val zipper = b.add(ZipWith[A, B, C](f))
-          left ~> zipper.in0
-          right ~> zipper.in1
-          zipper.out
+    def join[A, B, C, Mat, M1, M2](left: Source[A, M1], right: Source[B, M2], f: (A, B) => C)(combine: (M1, M2) => Mat): Source[C, Mat] = Source(left, right)(combine) { implicit b => (left, right) =>
+      val zipper = b.add(ZipWith[A, B, C](f))
+      left ~> zipper.in0
+      right ~> zipper.in1
+      zipper.out
     }
 
-    def join[A, B, C, D, E, Mat, M1, M2](left: Flow[A, B, M1], right: Flow[C, D, M2], f: (B, D) => E)(combine: (M1, M2) => Mat): Source[E, Mat] = Source(left, right)(combine) {
-      implicit b =>
-        (left, right) =>
-          val zipper = b.add(ZipWith[B, D, E](f))
-          left ~> zipper.in0
-          right ~> zipper.in1
-          zipper.out
+    def join[A, B, C, D, E, Mat, M1, M2](left: Flow[A, B, M1], right: Flow[C, D, M2], f: (B, D) => E)(combine: (M1, M2) => Mat): Source[E, Mat] = Source(left, right)(combine) { implicit b => (left, right) =>
+      val zipper = b.add(ZipWith[B, D, E](f))
+      left ~> zipper.in0
+      right ~> zipper.in1
+      zipper.out
     }
 
   }
@@ -73,64 +69,60 @@ object MoreFlowOps {
   object LoopOps {
 
     /** Zip and push through flow elements pulled from both source and loopSource */
-    def zipWithLoop[A, B, C, Mat](parallelism: Int, loopSource: Source[B, _], source: Source[A, Mat])(flow: Flow[(A, B), (C, B), Mat]): Source[C, Mat] = Source(source) {
-      implicit b =>
-        source =>
+    def zipWithLoop[A, B, C, Mat](parallelism: Int, loopSource: Source[B, _], source: Source[A, Mat])(flow: Flow[(A, B), (C, B), Mat]): Source[C, Mat] = Source(source) { implicit b => source =>
 
-          assert(parallelism > 0)
-          // junctions setup
-          val loopGate = b.add(MergePreferred[B](1))
-          val zipper = b.add(Zip[A, B])
-          val fork = b.add(Balance[(A, B)](parallelism))
-          val join = b.add(Merge[(C, B)](parallelism))
-          val unzipper = b.add(Unzip[C, B])
+      assert(parallelism > 0)
+      // junctions setup
+      val loopGate = b.add(MergePreferred[B](1))
+      val zipper = b.add(Zip[A, B])
+      val fork = b.add(Balance[(A, B)](parallelism))
+      val join = b.add(Merge[(C, B)](parallelism))
+      val unzipper = b.add(Unzip[C, B])
 
-          // components wiring
-          source ~> zipper.in0
-          loopSource ~> loopGate.in(0)
-          loopGate.out ~> zipper.in1
-          zipper.out ~> fork.in
-          // multiple flow copies balanced
-          for (i <- 0 until parallelism) {
-            fork.out(i) ~> flow ~> join.in(i)
-          }
-          join.out ~> unzipper.in
-          // back arc
-          loopGate.preferred <~ unzipper.out1
+      // components wiring
+      source ~> zipper.in0
+      loopSource ~> loopGate.in(0)
+      loopGate.out ~> zipper.in1
+      zipper.out ~> fork.in
+      // multiple flow copies balanced
+      for (i <- 0 until parallelism) {
+        fork.out(i) ~> flow ~> join.in(i)
+      }
+      join.out ~> unzipper.in
+      // back arc
+      loopGate.preferred <~ unzipper.out1
 
-          // we returns single outlet to wrap graph as a Source
-          unzipper.out0
+      // we returns single outlet to wrap graph as a Source
+      unzipper.out0
     }
       .named("sourceZipWithLoop")
 
     /** Zip and push through flow elements pulled from both base flow and loopSource */
-    def zipWithLoop[A, B, C, D, Mat](parallelism: Int, loopSource: Source[B, _], base: Flow[D, A, Mat])(flow: Flow[(A, B), (C, B), Mat]): Flow[D, C, Mat] = Flow(base) {
-      implicit b =>
-        base =>
+    def zipWithLoop[A, B, C, D, Mat](parallelism: Int, loopSource: Source[B, _], base: Flow[D, A, Mat])(flow: Flow[(A, B), (C, B), Mat]): Flow[D, C, Mat] = Flow(base) { implicit b => base =>
 
-          assert(parallelism > 0)
-          // junctions setup
-          val loopGate = b.add(MergePreferred[B](1))
-          val zipper = b.add(Zip[A, B])
-          val fork = b.add(Balance[(A, B)](parallelism))
-          val join = b.add(Merge[(C, B)](parallelism))
-          val unzipper = b.add(Unzip[C, B])
+      assert(parallelism > 0)
+      // junctions setup
+      val loopGate = b.add(MergePreferred[B](1))
+      val zipper = b.add(Zip[A, B])
+      val fork = b.add(Balance[(A, B)](parallelism))
+      val join = b.add(Merge[(C, B)](parallelism))
+      val unzipper = b.add(Unzip[C, B])
 
-          // components wiring
-          base.outlet ~> zipper.in0
-          loopSource ~> loopGate.in(0)
-          loopGate.out ~> zipper.in1
-          zipper.out ~> fork.in
-          // multiple flow copies balanced
-          for (i <- 0 until parallelism) {
-            fork.out(i) ~> flow ~> join.in(i)
-          }
-          join.out ~> unzipper.in
-          // back arc
-          loopGate.preferred <~ unzipper.out1
+      // components wiring
+      base.outlet ~> zipper.in0
+      loopSource ~> loopGate.in(0)
+      loopGate.out ~> zipper.in1
+      zipper.out ~> fork.in
+      // multiple flow copies balanced
+      for (i <- 0 until parallelism) {
+        fork.out(i) ~> flow ~> join.in(i)
+      }
+      join.out ~> unzipper.in
+      // back arc
+      loopGate.preferred <~ unzipper.out1
 
-          // we returns single outlet to wrap graph as a Flow
-          (base.inlet, unzipper.out0)
+      // we returns single outlet to wrap graph as a Flow
+      (base.inlet, unzipper.out0)
     }
       .named("flowZipWithLoop")
 

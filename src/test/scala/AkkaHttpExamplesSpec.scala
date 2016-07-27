@@ -1,4 +1,4 @@
-import org.scalatest.{ WordSpecLike, Matchers }
+import org.scalatest.{WordSpecLike, Matchers}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.junit.JUnitRunner
 import org.scalacheck._
