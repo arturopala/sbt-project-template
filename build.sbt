@@ -54,3 +54,10 @@ fork := true
 connectInput in run := true
 
 outputStrategy := Some(StdoutOutput)
+
+import de.heikoseeberger.sbtheader.license.Apache2_0
+
+headers := Map(
+  "scala" -> Apache2_0("2016", "Artur Opala"),
+  "conf" -> Apache2_0("2016", "Artur Opala", "#")
+)
