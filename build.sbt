@@ -4,7 +4,7 @@ version := "1.0-SNAPSHOT"
 
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
-startYear := Some(2015)
+startYear := Some(2016)
 
 description := "some-project-description"
 
@@ -12,19 +12,17 @@ scalaVersion := "2.12.1"
 
 developers := List(Developer("arturopala","Artur Opala","opala.artur@gmail.com",url("https://pl.linkedin.com/in/arturopala")))
 
-resolvers += Resolver.sonatypeRepo("snapshots")
+resolvers ++= Seq(
+  Resolver.sonatypeRepo("releases"),
+  Resolver.sonatypeRepo("snapshots")
+)
 
-resolvers += Resolver.jcenterRepo
-
-resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
-
-val scalazVersion = "7.1.3"
-val shapelessVersion = "2.2.5"
 val akkaVersion = "2.4.14"
 val akkaHttpVersion = "10.0.0"
 
 val funcDependencies = Seq(
-  "org.typelevel" %% "cats" % "0.8.1"
+  "org.typelevel" %% "cats" % "0.8.1",
+  "com.chuusai" %% "shapeless" % "2.3.2"
 )
 
 val akkaDependencies = Seq(
