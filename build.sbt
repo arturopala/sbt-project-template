@@ -47,7 +47,7 @@ val akkaHttpDependecies = Seq(
 
 val testDependencies = Seq(
    "org.scalatest" %% "scalatest" % "3.0.1" % Test,
-  "org.scalacheck" %% "scalacheck" % "1.13.4" % Test
+   "org.scalacheck" %% "scalacheck" % "1.13.4" % Test
 )
 
 libraryDependencies ++= testDependencies ++ funcDependencies ++ akkaDependencies ++ akkaHttpDependecies
@@ -70,5 +70,5 @@ import de.heikoseeberger.sbtheader.license.Apache2_0
 
 headers := Map(
   "scala" -> Apache2_0("2016", "Artur Opala"),
-  "conf" -> Apache2_0("2016", "Artur Opala", "#")
+  "conf"  -> Apache2_0("2016", "Artur Opala", "#")
 )
